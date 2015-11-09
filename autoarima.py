@@ -8,6 +8,9 @@ import rpy2.robjects
 import scipy as sp
 import numpy
 import pandas
+from pandas import read_csv, DataFrame, Series
+from pandas import time_range
+import statsmodels.api as sm
 import rpy2
 
 from rpy2 import *
@@ -19,9 +22,9 @@ def prepare_csv(fd="raw.txt",cpus=2):
 	val=list()
 	f = open(fd,'r')
 	for line in f:
-		if (line[:5]=="DATE:"):
+		if (line[:4]=="2015"):
 			for i in range(cpus):
-				tim.append(line[6:-1])
+				tim.append(line[:-1])
 		if (line.find("value=")>-1):
 			val.append(line[ line.find("value=")+6 : line.find("J") ] )
 	f.close()	
@@ -39,12 +42,11 @@ def save_csv(tim,val,fd='data.csv'):
 def forecasting_arima(csvname="data.csv"):
 	RO.r('library(forecast)')
 	RO.r('dat = read.csv("'+csvname+'", header = TRUE)')
-#R0.r('y =scan(file.choose())')
-# use example WWWusage data
-	RO.r('fit <- auto.arima(dat)')
-	return
+	RO.r('fit <- auto.arima(dat,trace=TRUE,allowdrift=TRUE)')
+	
+	return numpy.array(RO.r(fit))
 
 
 T,V = prepare_csv('sysbench_run.log')
 save_csv(T,V)
-forecasting_arima()
+print forecasting_arima()
