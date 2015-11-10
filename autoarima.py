@@ -14,10 +14,10 @@ from pandas import read_csv, DataFrame, Series
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import rpy2
-
+from statsmodels.iolib.table import SimpleTable
 from rpy2 import *
 import rpy2.robjects as RO
-
+from sklearn.metrics import r2_score
 
 def prepare_csv(fd="raw.txt",cpus=2):
 	tim=list()
@@ -30,9 +30,9 @@ def prepare_csv(fd="raw.txt",cpus=2):
 		if (line.find("value=")>-1):
 			val.append(line[ line.find("value=")+6 : line.find("J") ] )
 	f.close()	
-	#then sliding the time:
-	print tim
-	return tim,val
+	
+	#print tim
+	return tim[::2],val[::2]
 
 def save_csv(tim,val,fd='data.csv'):
 	f=open(fd,'w')
@@ -65,16 +65,14 @@ for i in range(len(dataset.date.values)):
 dataset['date'] = pd.to_datetime(dataset['date'])
 dataset.index=dataset.date.values
 dataset=dataset.drop(['date','time'],axis=1)
-
+print "DATASET:"
 print dataset
 
-dataset.index = dataset.time.values
 otg = dataset.J
-#otg=otg.resample('10Sec')
+otg.head()
 itog=otg.describe()
 otg.hist()
 itog
-
 
 print 'V = %f' % (itog['std']/itog['mean'])
 
@@ -89,6 +87,17 @@ ax1 = fig.add_subplot(211)
 fig = sm.graphics.tsa.plot_acf(otg1diff.values.squeeze(), lags=25, ax=ax1)
 ax2 = fig.add_subplot(212)
 fig = sm.graphics.tsa.plot_pacf(otg1diff, lags=25, ax=ax2)
-#print otg
-src_data_model = otg[:'01:25:05']
-model = sm.tsa.ARIMA(src_data_model, order=(4,1,0), freq='s').fit(full_output=False, disp=0)
+print 'otg'
+print otg
+src_data_model = otg
+print "SRC"
+print src_data_model
+model = sm.tsa.ARIMA(src_data_model, order=(4,1,0)).fit(trend='nc')
+print model.summary()
+q_test = sm.tsa.stattools.acf(model.resid, qstat=True)
+print DataFrame({'Q-stat':q_test[1], 'p-value':q_test[2]})
+
+pred = model.predict('2015-11-09 03:26:26','2015-11-09 03:29:06', typ='levels')
+trn = otg['2015-11-09 03:26:26':]
+r2 = r2_score(trn, pred[1:32])
+print 'R^2: %1.2f' % r2
