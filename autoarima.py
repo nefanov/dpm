@@ -99,5 +99,5 @@ print DataFrame({'Q-stat':q_test[1], 'p-value':q_test[2]})
 
 pred = model.predict('2015-11-09 03:26:26','2015-11-09 03:29:06', typ='levels')
 trn = otg['2015-11-09 03:26:26':]
-r2 = r2_score(trn, pred[1:32])
+r2 = r2_score(trn, pred)
 print 'R^2: %1.2f' % r2
