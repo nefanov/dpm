@@ -7,17 +7,20 @@ import readline
 #import pyplot as plt
 import rpy2.robjects
 import scipy as sp
-import numpy
+import numpy as np
 import pandas as pd
 from pandas import read_csv, DataFrame, Series
 #from pandas import time_range
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import rpy2
+import matplotlib
+from datetime import datetime
 from statsmodels.iolib.table import SimpleTable
 from rpy2 import *
 import rpy2.robjects as RO
 from sklearn.metrics import r2_score
+import ml_metrics as metrics
 
 def prepare_csv(fd="raw.txt",cpus=2):
 	tim=list()
@@ -30,15 +33,13 @@ def prepare_csv(fd="raw.txt",cpus=2):
 		if (line.find("value=")>-1):
 			val.append(line[ line.find("value=")+6 : line.find("J") ] )
 	f.close()	
-	
-	#print tim
 	return tim[::2],val[::2]
 
 def save_csv(tim,val,fd='data.csv'):
 	f=open(fd,'w')
-	f.write('date time J\n')
+	f.write('datetime;J\n')
 	for i in range(len(tim)):
-		f.write(tim[i]+' '+val[i]+'\n')
+		f.write(tim[i]+';'+val[i]+'\n')
 	f.close()
 	return
 
@@ -52,29 +53,53 @@ def forecasting_arima(csvname="data.csv"):
 
 
 T,V = prepare_csv('sysbench_run.log')
+#then save data
 save_csv(T,V)
-forecasting_arima()
-#go
+#forecasting_arima()
+#do_analysys
 
-dataset = read_csv('data.csv', ' ')
+dataset = read_csv('data.csv', ';', index_col=['datetime'],parse_dates=['datetime'])
 
-print dataset
 dataset.head()
-for i in range(len(dataset.date.values)):
-	dataset.date.values[i] += ' ' +  dataset.time.values[i]
-dataset['date'] = pd.to_datetime(dataset['date'])
-dataset.index=dataset.date.values
-dataset=dataset.drop(['date','time'],axis=1)
+
 print "DATASET:"
-print dataset
 
 otg = dataset.J
 otg.head()
-itog=otg.describe()
-otg.hist()
-itog
+x=list()
+y=list()
+y=np.array(otg.values).tolist()
 
-print 'V = %f' % (itog['std']/itog['mean'])
+for i in range(len(otg.values)):
+	otg.values[i] = y[i]
+#filter misaligned values because of RAPL overflow(as int64) by average of neighbours:
+for i in range(len(otg.index)-1):
+        if (otg.values[i] < 0.0):
+                if (i==0):
+                        otg.values[i] = otg.values[i+1]/2;
+                else:
+                        otg.values[i] = (otg.values[i-1] + otg.values[i+1])/2;
+print 'res'
+'''
+plt.grid()
+plt.plot(otg.index,otg.values)
+plt.show()
+'''
+otg=otg['2015-11-08 18:53:03':]
+
+plt.grid()
+plt.plot(otg.index,otg.values)
+plt.show()
+
+print otg
+otg.to_csv("filtered.csv")
+#forecasting_arima("filtered.csv")
+
+#itog=otg.describe()
+
+#itog
+
+#print 'V = %f' % (itog['std']/itog['mean'])
 
 otg1diff = otg.diff(periods=1).dropna()
 m = otg1diff.index[len(otg1diff.index)/2+1]
@@ -89,15 +114,27 @@ ax2 = fig.add_subplot(212)
 fig = sm.graphics.tsa.plot_pacf(otg1diff, lags=25, ax=ax2)
 print 'otg'
 print otg
-src_data_model = otg
-print "SRC"
-print src_data_model
-model = sm.tsa.ARIMA(src_data_model, order=(4,1,0)).fit(trend='nc')
+src_data_model = otg[:'2015-11-09 03:26:26']
+model = sm.tsa.ARIMA(src_data_model, order=(4,1,0)).fit() #trend='nc' if need
 print model.summary()
 q_test = sm.tsa.stattools.acf(model.resid, qstat=True)
 print DataFrame({'Q-stat':q_test[1], 'p-value':q_test[2]})
 
-pred = model.predict('2015-11-09 03:26:26','2015-11-09 03:29:06', typ='levels')
+pred = model.predict('2015-11-09 03:26:16','2015-11-09 03:29:06', typ='levels')
 trn = otg['2015-11-09 03:26:26':]
 r2 = r2_score(trn, pred)
 print 'R^2: %1.2f' % r2
+#mean-square rmse
+
+metrics.rmse(trn,pred)
+
+metrics.mae(trn,pred)
+
+fig, (ax1) = plt.subplots(nrows = 1, sharex=True)
+ax1.plot(otg.index,otg.values)
+
+ax1.plot_date(pred.index,pred.values,'r--')
+
+plt.show()
+
+#print pred.values
